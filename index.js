@@ -10,7 +10,7 @@ const ACTIVITY_FILE = path.join(__dirname, "activity.json");
 
 // 🔴 여기 공지용 채널 ID로 바꿔줘
 const BIRTHDAY_CHANNEL_ID = "1260292142543147202";  // 생일 축하 채널
-const ACTIVITY_CHANNEL_ID = "여기에_공지채널_ID";   // 활동 리포트 보낼 채널
+const ACTIVITY_CHANNEL_ID = "1260292141746491420";   // 활동 리포트 보낼 채널
 
 const ROLE_ID = "1260292139493883912";              // 뉴페관리자 역할 ID
 
@@ -278,3 +278,4 @@ if (!token) {
 }
 
 client.login(token);
+
