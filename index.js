@@ -52,7 +52,13 @@ client.on("messageCreate", (msg) => {
 ┕━»•» 🌸 «•«━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┙`
       );
 
-    msg.channel.send({ embeds: [embed] });
+   const ROLE_ID = "1260292139493883912"; // 뉴페관리자 역할 ID
+
+msg.channel.send({
+  content: `<@&${ROLE_ID}>`,   // 역할 멘션
+  embeds: [embed]
+});
+
   }
 });
 
@@ -69,6 +75,7 @@ if (!token) {
 }
 
 client.login(token);
+
 
 
 
