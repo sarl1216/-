@@ -58,5 +58,17 @@ client.on("messageCreate", (msg) => {
 
 // 위에는 너가 쓰던 코드들...
 
-client.login(process.env.DISCORD_TOKEN);
+// 로그인하기 전에 토큰 체크
+const token = process.env.DISCORD_TOKEN;
+
+console.log("DISCORD_TOKEN length:", (token || "").length);
+
+if (!token) {
+  console.error("❌ DISCORD_TOKEN이 설정되어 있지 않습니다.");
+  process.exit(1);
+}
+
+client.login(token);
+
+
 
