@@ -56,4 +56,7 @@ client.on("messageCreate", (msg) => {
   }
 });
 
+// 위에는 너가 쓰던 코드들...
+
 client.login(process.env.DISCORD_TOKEN);
+
