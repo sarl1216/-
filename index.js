@@ -3,13 +3,13 @@ const fs = require("fs");
 const path = require("path");
 
 // =====================
-// 1. 생일 / 설정 관련 상수
+// 1. 파일 / 설정 상수
 // =====================
 const BIRTHDAY_FILE = path.join(__dirname, "birthdays.json");
-const BIRTHDAY_CHANNEL_ID = "1260292142543147202";     // 생일 축하 보낼 채널
-const ROLE_ID = "1260292139493883912";                 // 뉴페관리자 역할 ID
+const BIRTHDAY_CHANNEL_ID = "1260292142543147202";  // 생일 축하 채널
+const ROLE_ID = "1260292139493883912";              // 뉴페관리자 역할 ID
 
-// 서버별 생일 데이터
+// 생일 데이터 로드
 let birthdays = {};
 try {
   const raw = fs.readFileSync(BIRTHDAY_FILE, "utf8");
@@ -34,22 +34,24 @@ const client = new Client({
 });
 
 // =====================
-// 3. ready 이벤트
+// 3. READY EVENT
 // =====================
 client.on("ready", () => {
   console.log(`로그인 성공: ${client.user.tag}`);
 
-  // 1시간마다 한 번씩 생일 체크
-  setInterval(checkBirthdays, 60 * 60 * 1000);
+  // 하루 1회 생일 체크 예약
+  scheduleDailyBirthdayCheck();
 });
 
 // =====================
-// 4. 메시지 처리
+// 4. 메시지 명령어 처리
 // =====================
 client.on("messageCreate", (msg) => {
   if (msg.author.bot) return;
 
-  // --- !환영 ---
+  // ───────────────────────────
+  // !환영
+  // ───────────────────────────
   if (msg.content.startsWith("!환영")) {
     const mentionedUser = msg.mentions.users.first();
 
@@ -65,7 +67,7 @@ client.on("messageCreate", (msg) => {
 
 　　　　　　　⋅.｡  𐐪 **만담** 𐑂 ‧₊˚⊹
 
-✨  새로운 별이 찾아왔어요.  
+✨ 새로운 별이 찾아왔어요.  
 모두 따뜻하게 맞아주세요. 🌙
 
 👉 **${mentionedUser} 님**, 저희 서버에 오신 걸 환영해요.
@@ -84,14 +86,15 @@ client.on("messageCreate", (msg) => {
 ┕━»•» 🌸 «•«━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┙`
       );
 
-    // 역할 멘션 + 임베드 전송
     msg.channel.send({
       content: `<@&${ROLE_ID}>`,
       embeds: [embed]
     });
   }
 
-  // --- !생일등록 ---
+  // ───────────────────────────
+  // !생일등록
+  // ───────────────────────────
   if (msg.content.startsWith("!생일등록")) {
     const args = msg.content.trim().split(/\s+/);
     if (args.length < 2) {
@@ -99,16 +102,14 @@ client.on("messageCreate", (msg) => {
       return;
     }
 
-    const date = args[1]; // "MM-DD"
+    const date = args[1];
     if (!/^\d{2}-\d{2}$/.test(date)) {
-      msg.channel.send("형식이 이상해! `MM-DD` 형식으로 적어줘. 예: `12-16`");
+      msg.channel.send("형식이 이상해! `MM-DD` 형식으로 적어줘.");
       return;
     }
 
     const [mm, dd] = date.split("-");
-    const month = Number(mm);
-    const day = Number(dd);
-    if (month < 1 || month > 12 || day < 1 || day > 31) {
+    if (+mm < 1 || +mm > 12 || +dd < 1 || +dd > 31) {
       msg.channel.send("존재할 수 없는 날짜야. 다시 확인해줘!");
       return;
     }
@@ -122,18 +123,19 @@ client.on("messageCreate", (msg) => {
     msg.channel.send(`🎂 ${msg.author} 님 생일을 **${date}** 로 저장했어!`);
   }
 
-  // --- !생일삭제 ---
+  // ───────────────────────────
+  // !생일삭제
+  // ───────────────────────────
   if (msg.content.startsWith("!생일삭제")) {
     const guildId = msg.guild.id;
 
     if (!birthdays[guildId] || !birthdays[guildId][msg.author.id]) {
-      msg.channel.send("삭제할 생일 정보가 없어요. 먼저 `!생일등록`으로 등록해줘!");
+      msg.channel.send("삭제할 생일 정보가 없어요!");
       return;
     }
 
     delete birthdays[guildId][msg.author.id];
 
-    // 서버에 아무도 안 남았으면 그 길드 자체도 정리
     if (Object.keys(birthdays[guildId]).length === 0) {
       delete birthdays[guildId];
     }
@@ -142,21 +144,24 @@ client.on("messageCreate", (msg) => {
     msg.channel.send("✅ 생일 정보를 삭제했어요.");
   }
 
-  // --- !내생일 ---
+  // ───────────────────────────
+  // !내생일
+  // ───────────────────────────
   if (msg.content.startsWith("!내생일")) {
     const guildId = msg.guild.id;
-    const userId = msg.author.id;
+    const user = msg.author.id;
 
-    if (!birthdays[guildId] || !birthdays[guildId][userId]) {
-      msg.channel.send("아직 생일이 등록되어 있지 않아요! `!생일등록 MM-DD` 로 등록해줘.");
+    if (!birthdays[guildId] || !birthdays[guildId][user]) {
+      msg.channel.send("아직 생일이 등록되어 있지 않아요!");
       return;
     }
 
-    const myBD = birthdays[guildId][userId];
-    msg.channel.send(`🎂 ${msg.author} 님의 생일은 **${myBD}** 입니다!`);
+    msg.channel.send(`🎂 ${msg.author} 님의 생일은 **${birthdays[guildId][user]}** 입니다!`);
   }
 
-  // --- !오늘생일 ---
+  // ───────────────────────────
+  // !오늘생일
+  // ───────────────────────────
   if (msg.content.startsWith("!오늘생일")) {
     const guildId = msg.guild.id;
     const today = getTodayKST();
@@ -167,7 +172,7 @@ client.on("messageCreate", (msg) => {
     }
 
     const matches = Object.entries(birthdays[guildId])
-      .filter(([userId, date]) => date === today);
+      .filter(([_, date]) => date === today);
 
     if (matches.length === 0) {
       msg.channel.send("오늘 생일인 멤버가 없어요!");
@@ -182,7 +187,9 @@ client.on("messageCreate", (msg) => {
     msg.channel.send(result);
   }
 
-  // --- !이번달생일 ---
+  // ───────────────────────────
+  // !이번달생일
+  // ───────────────────────────
   if (msg.content.startsWith("!이번달생일")) {
     const guildId = msg.guild.id;
 
@@ -193,17 +200,17 @@ client.on("messageCreate", (msg) => {
 
     const now = new Date();
     const kst = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
-    const thisMonth = String(kst.getMonth() + 1).padStart(2, "0");
+    const month = String(kst.getMonth() + 1).padStart(2, "0");
 
     const matches = Object.entries(birthdays[guildId])
-      .filter(([userId, date]) => date.startsWith(thisMonth));
+      .filter(([_, date]) => date.startsWith(month));
 
     if (matches.length === 0) {
-      msg.channel.send("이번 달에 생일인 멤버가 없어요!");
+      msg.channel.send("이번 달 생일인 멤버가 없어요!");
       return;
     }
 
-    let result = `🎉 **${thisMonth}월 생일 멤버 목록**\n`;
+    let result = `🎉 **${month}월 생일 멤버 목록**\n`;
     for (const [userId, date] of matches) {
       result += `- <@${userId}> : ${date}\n`;
     }
@@ -211,37 +218,38 @@ client.on("messageCreate", (msg) => {
     msg.channel.send(result);
   }
 
-  // --- !생일명령어 ---
+  // ───────────────────────────
+  // !생일명령어
+  // ───────────────────────────
   if (msg.content.startsWith("!생일명령어")) {
     msg.channel.send(
 `📘 **생일 관련 명령어 목록**
 
 \`!생일등록 MM-DD\` — 생일 등록  
-\`!생일삭제\` — 내 생일 삭제  
+\`!생일삭제\` — 생일 삭제  
 \`!내생일\` — 내가 등록한 생일 확인  
-\`!오늘생일\` — 오늘 생일인 멤버 확인  
-\`!이번달생일\` — 이번 달 생일 멤버 확인  
-\`!생일명령어\` — 명령어 설명 보기`
+\`!오늘생일\` — 오늘 생일 멤버 확인  
+\`!이번달생일\` — 이번 달 생일 확인  
+\`!생일명령어\` — 명령어 목록`
     );
   }
 });
 
 // =====================
-// 5. 생일 체크 함수들
+// 5. 생일 날짜 처리 / 체크
 // =====================
 function getTodayKST() {
   const now = new Date();
-  const kst = new Date(
-    now.toLocaleString("en-US", { timeZone: "Asia/Seoul" })
-  );
+  const kst = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
   const mm = String(kst.getMonth() + 1).padStart(2, "0");
   const dd = String(kst.getDate()).padStart(2, "0");
   return `${mm}-${dd}`;
 }
 
+// 실제 생일 축하 처리 (하루 1회)
 function checkBirthdays() {
   const today = getTodayKST();
-  console.log("오늘 날짜(KST):", today);
+  console.log("생일 체크 실행:", today);
 
   for (const [guildId, users] of Object.entries(birthdays)) {
     const guild = client.guilds.cache.get(guildId);
@@ -252,18 +260,41 @@ function checkBirthdays() {
 
     for (const [userId, date] of Object.entries(users)) {
       if (date === today) {
-        channel.send(`@everyone 🎂 오늘은 <@${userId}> 님의 생일이에요! 모두 축하해 주세요! 🎉`);
+        channel.send(`@everyone 🎂 오늘은 <@${userId}> 님의 생일이에요! 모두 축하해주세요! 🎉`);
       }
     }
   }
+}
+
+// 하루 1회 스케줄링
+function scheduleDailyBirthdayCheck() {
+  const now = new Date();
+  const kst = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
+
+  const next = new Date(kst);
+  next.setHours(0, 5, 0, 0); // 00:05
+
+  // 이미 00:05 지났으면 다음날
+  if (kst > next) {
+    next.setDate(next.getDate() + 1);
+  }
+
+  const delay = next - kst;
+
+  console.log("다음 생일 체크까지 남은 ms:", delay);
+
+  // 첫 실행 예약
+  setTimeout(() => {
+    checkBirthdays();
+    // 이후 매일 24시간 간격 실행
+    setInterval(checkBirthdays, 24 * 60 * 60 * 1000);
+  }, delay);
 }
 
 // =====================
 // 6. 로그인
 // =====================
 const token = process.env.DISCORD_TOKEN;
-
-console.log("DISCORD_TOKEN length:", (token || "").length);
 
 if (!token) {
   console.error("❌ DISCORD_TOKEN이 설정되어 있지 않습니다.");
