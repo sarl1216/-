@@ -1,5 +1,30 @@
 const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
+const fs = require("fs");
+const path = require("path");
 
+// =====================
+// 1. 생일 데이터 관련
+// =====================
+const BIRTHDAY_FILE = path.join(__dirname, "birthdays.json");
+const BIRTHDAY_CHANNEL_ID = "1260292142543147202";     // 생일 축하 보낼 채널
+const ROLE_ID = "1260292139493883912";                 // 뉴페관리자 역할 ID
+
+// 서버별 생일 데이터
+let birthdays = {};
+try {
+  const raw = fs.readFileSync(BIRTHDAY_FILE, "utf8");
+  birthdays = JSON.parse(raw);
+} catch (e) {
+  birthdays = {};
+}
+
+function saveBirthdays() {
+  fs.writeFileSync(BIRTHDAY_FILE, JSON.stringify(birthdays, null, 2), "utf8");
+}
+
+// =====================
+// 2. 디스코드 클라이언트
+// =====================
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -8,17 +33,26 @@ const client = new Client({
   ]
 });
 
+// =====================
+// 3. ready 이벤트
+// =====================
 client.on("ready", () => {
   console.log(`로그인 성공: ${client.user.tag}`);
+
+  // 1시간마다 한 번씩 생일 체크
+  setInterval(checkBirthdays, 60 * 60 * 1000);
 });
 
+// =====================
+// 4. 메시지 처리
+// =====================
 client.on("messageCreate", (msg) => {
-  // 명령어 시작
-  if (msg.content.startsWith("!환영")) {
+  if (msg.author.bot) return;
 
+  // --- !환영 ---
+  if (msg.content.startsWith("!환영")) {
     const mentionedUser = msg.mentions.users.first();
 
-    // 멘션 안 했을 때 안내
     if (!mentionedUser) {
       msg.channel.send("누구를 환영할지 멘션해줘! 예: `!환영 @유저`");
       return;
@@ -50,19 +84,80 @@ client.on("messageCreate", (msg) => {
 ┕━»•» 🌸 «•«━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┙`
       );
 
-   const ROLE_ID = "1260292139493883912"; // 뉴페관리자 역할 ID
+    // 역할 멘션 + 임베드 전송
+    msg.channel.send({
+      content: `<@&${ROLE_ID}>`,
+      embeds: [embed]
+    });
+  }
 
-msg.channel.send({
-  content: `<@&${ROLE_ID}>`,   // 역할 멘션
-  embeds: [embed]
-});
+  // --- !생일등록 ---
+  if (msg.content.startsWith("!생일등록")) {
+    const args = msg.content.trim().split(/\s+/);
+    if (args.length < 2) {
+      msg.channel.send("사용법: `!생일등록 MM-DD` 예: `!생일등록 12-16`");
+      return;
+    }
 
+    const date = args[1]; // "MM-DD"
+    if (!/^\d{2}-\d{2}$/.test(date)) {
+      msg.channel.send("형식이 이상해! `MM-DD` 형식으로 적어줘. 예: `12-16`");
+      return;
+    }
+
+    const [mm, dd] = date.split("-");
+    const month = Number(mm);
+    const day = Number(dd);
+    if (month < 1 || month > 12 || day < 1 || day > 31) {
+      msg.channel.send("존재할 수 없는 날짜야. 다시 확인해줘!");
+      return;
+    }
+
+    const guildId = msg.guild.id;
+    if (!birthdays[guildId]) birthdays[guildId] = {};
+
+    birthdays[guildId][msg.author.id] = date;
+    saveBirthdays();
+
+    msg.channel.send(`🎂 ${msg.author} 님 생일을 **${date}** 로 저장했어!`);
   }
 });
 
-// 위에는 너가 쓰던 코드들...
+// =====================
+// 5. 생일 체크 함수들
+// =====================
+function getTodayKST() {
+  const now = new Date();
+  const kst = new Date(
+    now.toLocaleString("en-US", { timeZone: "Asia/Seoul" })
+  );
+  const mm = String(kst.getMonth() + 1).padStart(2, "0");
+  const dd = String(kst.getDate()).padStart(2, "0");
+  return `${mm}-${dd}`;
+}
 
-// 로그인하기 전에 토큰 체크
+function checkBirthdays() {
+  const today = getTodayKST();
+  console.log("오늘 날짜(KST):", today);
+
+  for (const [guildId, users] of Object.entries(birthdays)) {
+    const guild = client.guilds.cache.get(guildId);
+    if (!guild) continue;
+
+    const channel = guild.channels.cache.get(BIRTHDAY_CHANNEL_ID);
+    if (!channel) continue;
+
+    for (const [userId, date] of Object.entries(users)) {
+      if (date === today) {
+        channel.send(`🎂 오늘은 <@${userId}> 님의 생일이에요! 모두 축하해 주세요! 🎉`);
+      }
+    }
+  }
+}
+
+// =====================
+// 6. 로그인
+// =====================
 const token = process.env.DISCORD_TOKEN;
 
 console.log("DISCORD_TOKEN length:", (token || "").length);
@@ -73,8 +168,3 @@ if (!token) {
 }
 
 client.login(token);
-
-
-
-
-
