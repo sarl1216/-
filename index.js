@@ -141,6 +141,89 @@ client.on("messageCreate", (msg) => {
     saveBirthdays();
     msg.channel.send("✅ 생일 정보를 삭제했어요.");
   }
+
+  // --- !내생일 ---
+  if (msg.content.startsWith("!내생일")) {
+    const guildId = msg.guild.id;
+    const userId = msg.author.id;
+
+    if (!birthdays[guildId] || !birthdays[guildId][userId]) {
+      msg.channel.send("아직 생일이 등록되어 있지 않아요! `!생일등록 MM-DD` 로 등록해줘.");
+      return;
+    }
+
+    const myBD = birthdays[guildId][userId];
+    msg.channel.send(`🎂 ${msg.author} 님의 생일은 **${myBD}** 입니다!`);
+  }
+
+  // --- !오늘생일 ---
+  if (msg.content.startsWith("!오늘생일")) {
+    const guildId = msg.guild.id;
+    const today = getTodayKST();
+
+    if (!birthdays[guildId]) {
+      msg.channel.send("오늘 생일인 멤버가 없어요!");
+      return;
+    }
+
+    const matches = Object.entries(birthdays[guildId])
+      .filter(([userId, date]) => date === today);
+
+    if (matches.length === 0) {
+      msg.channel.send("오늘 생일인 멤버가 없어요!");
+      return;
+    }
+
+    let result = "🎉 **오늘 생일인 멤버**\n";
+    for (const [userId, date] of matches) {
+      result += `- <@${userId}> : ${date}\n`;
+    }
+
+    msg.channel.send(result);
+  }
+
+  // --- !이번달생일 ---
+  if (msg.content.startsWith("!이번달생일")) {
+    const guildId = msg.guild.id;
+
+    if (!birthdays[guildId]) {
+      msg.channel.send("아직 아무도 생일을 등록하지 않았어요!");
+      return;
+    }
+
+    const now = new Date();
+    const kst = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
+    const thisMonth = String(kst.getMonth() + 1).padStart(2, "0");
+
+    const matches = Object.entries(birthdays[guildId])
+      .filter(([userId, date]) => date.startsWith(thisMonth));
+
+    if (matches.length === 0) {
+      msg.channel.send("이번 달에 생일인 멤버가 없어요!");
+      return;
+    }
+
+    let result = `🎉 **${thisMonth}월 생일 멤버 목록**\n`;
+    for (const [userId, date] of matches) {
+      result += `- <@${userId}> : ${date}\n`;
+    }
+
+    msg.channel.send(result);
+  }
+
+  // --- !생일명령어 ---
+  if (msg.content.startsWith("!생일명령어")) {
+    msg.channel.send(
+`📘 **생일 관련 명령어 목록**
+
+\`!생일등록 MM-DD\` — 생일 등록  
+\`!생일삭제\` — 내 생일 삭제  
+\`!내생일\` — 내가 등록한 생일 확인  
+\`!오늘생일\` — 오늘 생일인 멤버 확인  
+\`!이번달생일\` — 이번 달 생일 멤버 확인  
+\`!생일명령어\` — 명령어 설명 보기`
+    );
+  }
 });
 
 // =====================
