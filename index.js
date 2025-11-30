@@ -3,7 +3,7 @@ const fs = require("fs");
 const path = require("path");
 
 // =====================
-// 1. 생일 데이터 관련
+// 1. 생일 / 설정 관련 상수
 // =====================
 const BIRTHDAY_FILE = path.join(__dirname, "birthdays.json");
 const BIRTHDAY_CHANNEL_ID = "1260292142543147202";     // 생일 축하 보낼 채널
@@ -121,6 +121,26 @@ client.on("messageCreate", (msg) => {
 
     msg.channel.send(`🎂 ${msg.author} 님 생일을 **${date}** 로 저장했어!`);
   }
+
+  // --- !생일삭제 ---
+  if (msg.content.startsWith("!생일삭제")) {
+    const guildId = msg.guild.id;
+
+    if (!birthdays[guildId] || !birthdays[guildId][msg.author.id]) {
+      msg.channel.send("삭제할 생일 정보가 없어요. 먼저 `!생일등록`으로 등록해줘!");
+      return;
+    }
+
+    delete birthdays[guildId][msg.author.id];
+
+    // 서버에 아무도 안 남았으면 그 길드 자체도 정리
+    if (Object.keys(birthdays[guildId]).length === 0) {
+      delete birthdays[guildId];
+    }
+
+    saveBirthdays();
+    msg.channel.send("✅ 생일 정보를 삭제했어요.");
+  }
 });
 
 // =====================
@@ -149,7 +169,7 @@ function checkBirthdays() {
 
     for (const [userId, date] of Object.entries(users)) {
       if (date === today) {
-        channel.send(`🎂 오늘은 <@${userId}> 님의 생일이에요! 모두 축하해 주세요! 🎉`);
+        channel.send(`@everyone 🎂 오늘은 <@${userId}> 님의 생일이에요! 모두 축하해 주세요! 🎉`);
       }
     }
   }
