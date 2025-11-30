@@ -6,10 +6,15 @@ const path = require("path");
 // 1. 파일 / 설정 상수
 // =====================
 const BIRTHDAY_FILE = path.join(__dirname, "birthdays.json");
+const ACTIVITY_FILE = path.join(__dirname, "activity.json");
+
+// 🔴 여기 공지용 채널 ID로 바꿔줘
 const BIRTHDAY_CHANNEL_ID = "1260292142543147202";  // 생일 축하 채널
+const ACTIVITY_CHANNEL_ID = "여기에_공지채널_ID";   // 활동 리포트 보낼 채널
+
 const ROLE_ID = "1260292139493883912";              // 뉴페관리자 역할 ID
 
-// 생일 데이터 로드
+// ----- 생일 데이터 로드 -----
 let birthdays = {};
 try {
   const raw = fs.readFileSync(BIRTHDAY_FILE, "utf8");
@@ -20,6 +25,19 @@ try {
 
 function saveBirthdays() {
   fs.writeFileSync(BIRTHDAY_FILE, JSON.stringify(birthdays, null, 2), "utf8");
+}
+
+// ----- 활동 데이터 로드 -----
+let activity = {};
+try {
+  const raw = fs.readFileSync(ACTIVITY_FILE, "utf8");
+  activity = JSON.parse(raw);
+} catch (e) {
+  activity = {};
+}
+
+function saveActivity() {
+  fs.writeFileSync(ACTIVITY_FILE, JSON.stringify(activity, null, 2), "utf8");
 }
 
 // =====================
@@ -39,15 +57,28 @@ const client = new Client({
 client.on("ready", () => {
   console.log(`로그인 성공: ${client.user.tag}`);
 
-  // 하루 1회 생일 체크 예약
-  scheduleDailyBirthdayCheck();
+  // 하루 1회 생일 + 활동 리포트 실행
+  scheduleDailyTasks();
 });
 
 // =====================
-// 4. 메시지 명령어 처리
+// 4. 메시지 처리
 // =====================
 client.on("messageCreate", (msg) => {
   if (msg.author.bot) return;
+
+  const guildId = msg.guild?.id;
+  const userId = msg.author.id;
+
+  // ───────────────────────────
+  // (공통) 활동 기록
+  // ───────────────────────────
+  if (guildId) {
+    if (!activity[guildId]) activity[guildId] = {};
+    if (!activity[guildId][userId]) activity[guildId][userId] = 0;
+    activity[guildId][userId] += 1;
+    saveActivity();
+  }
 
   // ───────────────────────────
   // !환영
@@ -67,7 +98,7 @@ client.on("messageCreate", (msg) => {
 
 　　　　　　　⋅.｡  𐐪 **만담** 𐑂 ‧₊˚⊹
 
-✨ 새로운 별이 찾아왔어요.  
+✨  새로운 별이 찾아왔어요.  
 모두 따뜻하게 맞아주세요. 🌙
 
 👉 **${mentionedUser} 님**, 저희 서버에 오신 걸 환영해요.
@@ -93,150 +124,55 @@ client.on("messageCreate", (msg) => {
   }
 
   // ───────────────────────────
-  // !생일등록
+  // !생일축하 @유저
   // ───────────────────────────
-  if (msg.content.startsWith("!생일등록")) {
-    const args = msg.content.trim().split(/\s+/);
-    if (args.length < 2) {
-      msg.channel.send("사용법: `!생일등록 MM-DD` 예: `!생일등록 12-16`");
+  if (msg.content.startsWith("!생일축하")) {
+    const mentionedUser = msg.mentions.users.first();
+
+    if (!mentionedUser) {
+      msg.channel.send("누구를 축하할지 멘션해줘! 예: `!생일축하 @유저`");
       return;
     }
 
-    const date = args[1];
-    if (!/^\d{2}-\d{2}$/.test(date)) {
-      msg.channel.send("형식이 이상해! `MM-DD` 형식으로 적어줘.");
-      return;
-    }
+    const embed = new EmbedBuilder()
+      .setColor("#ffe066")
+      .setTitle("🎂 생일 축하해요!")
+      .setDescription(
+`오늘은 **${mentionedUser} 님** 의 특별한 날이에요. ✨  
 
-    const [mm, dd] = date.split("-");
-    if (+mm < 1 || +mm > 12 || +dd < 1 || +dd > 31) {
-      msg.channel.send("존재할 수 없는 날짜야. 다시 확인해줘!");
-      return;
-    }
+이 서버에서 보내는 한 해가  
+조금 더 따뜻하고,  
+조금 더 편안하고,  
+조금 더 웃을 일이 많았으면 좋겠어요. 🌙
 
-    const guildId = msg.guild.id;
-    if (!birthdays[guildId]) birthdays[guildId] = {};
+다 같이 ${mentionedUser} 님의 생일을 축하해 주세요! 🎉`
+      );
 
-    birthdays[guildId][msg.author.id] = date;
-    saveBirthdays();
-
-    msg.channel.send(`🎂 ${msg.author} 님 생일을 **${date}** 로 저장했어!`);
+    msg.channel.send({
+      content: `@everyone 🎂 오늘은 ${mentionedUser} 님의 생일이에요!`,
+      embeds: [embed]
+    });
   }
 
   // ───────────────────────────
-  // !생일삭제
-  // ───────────────────────────
-  if (msg.content.startsWith("!생일삭제")) {
-    const guildId = msg.guild.id;
-
-    if (!birthdays[guildId] || !birthdays[guildId][msg.author.id]) {
-      msg.channel.send("삭제할 생일 정보가 없어요!");
-      return;
-    }
-
-    delete birthdays[guildId][msg.author.id];
-
-    if (Object.keys(birthdays[guildId]).length === 0) {
-      delete birthdays[guildId];
-    }
-
-    saveBirthdays();
-    msg.channel.send("✅ 생일 정보를 삭제했어요.");
-  }
-
-  // ───────────────────────────
-  // !내생일
-  // ───────────────────────────
+  // !내생일 (옵션: birthdays.json을 수동으로 관리하고 싶으면 유지)
+// ───────────────────────────
   if (msg.content.startsWith("!내생일")) {
-    const guildId = msg.guild.id;
-    const user = msg.author.id;
+    if (!guildId) return;
 
-    if (!birthdays[guildId] || !birthdays[guildId][user]) {
-      msg.channel.send("아직 생일이 등록되어 있지 않아요!");
+    if (!birthdays[guildId] || !birthdays[guildId][userId]) {
+      msg.channel.send("아직 생일이 등록되어 있지 않아요! (birthdays.json에 정보가 없어요)");
       return;
     }
 
-    msg.channel.send(`🎂 ${msg.author} 님의 생일은 **${birthdays[guildId][user]}** 입니다!`);
+    msg.channel.send(`🎂 ${msg.author} 님의 생일은 **${birthdays[guildId][userId]}** 입니다!`);
   }
 
-  // ───────────────────────────
-  // !오늘생일
-  // ───────────────────────────
-  if (msg.content.startsWith("!오늘생일")) {
-    const guildId = msg.guild.id;
-    const today = getTodayKST();
-
-    if (!birthdays[guildId]) {
-      msg.channel.send("오늘 생일인 멤버가 없어요!");
-      return;
-    }
-
-    const matches = Object.entries(birthdays[guildId])
-      .filter(([_, date]) => date === today);
-
-    if (matches.length === 0) {
-      msg.channel.send("오늘 생일인 멤버가 없어요!");
-      return;
-    }
-
-    let result = "🎉 **오늘 생일인 멤버**\n";
-    for (const [userId, date] of matches) {
-      result += `- <@${userId}> : ${date}\n`;
-    }
-
-    msg.channel.send(result);
-  }
-
-  // ───────────────────────────
-  // !이번달생일
-  // ───────────────────────────
-  if (msg.content.startsWith("!이번달생일")) {
-    const guildId = msg.guild.id;
-
-    if (!birthdays[guildId]) {
-      msg.channel.send("아직 아무도 생일을 등록하지 않았어요!");
-      return;
-    }
-
-    const now = new Date();
-    const kst = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
-    const month = String(kst.getMonth() + 1).padStart(2, "0");
-
-    const matches = Object.entries(birthdays[guildId])
-      .filter(([_, date]) => date.startsWith(month));
-
-    if (matches.length === 0) {
-      msg.channel.send("이번 달 생일인 멤버가 없어요!");
-      return;
-    }
-
-    let result = `🎉 **${month}월 생일 멤버 목록**\n`;
-    for (const [userId, date] of matches) {
-      result += `- <@${userId}> : ${date}\n`;
-    }
-
-    msg.channel.send(result);
-  }
-
-  // ───────────────────────────
-  // !생일명령어
-  // ───────────────────────────
-  if (msg.content.startsWith("!생일명령어")) {
-    msg.channel.send(
-`📘 **생일 관련 명령어 목록**
-
-\`!생일등록 MM-DD\` — 생일 등록  
-\`!생일삭제\` — 생일 삭제  
-\`!내생일\` — 내가 등록한 생일 확인  
-\`!오늘생일\` — 오늘 생일 멤버 확인  
-\`!이번달생일\` — 이번 달 생일 확인  
-\`!생일명령어\` — 명령어 목록`
-    );
-  }
+  // 여기서부터는 예전 생일등록/삭제/오늘생일/이번달생일/생일명령어는 전부 제거됨
 });
 
 // =====================
-// 5. 생일 날짜 처리 / 체크
+// 5. 공통 날짜 함수
 // =====================
 function getTodayKST() {
   const now = new Date();
@@ -246,7 +182,9 @@ function getTodayKST() {
   return `${mm}-${dd}`;
 }
 
-// 실제 생일 축하 처리 (하루 1회)
+// =====================
+// 6. 생일 체크 (자동 공지용 – birthdays.json 쓰고 싶으면 유지)
+// =====================
 function checkBirthdays() {
   const today = getTodayKST();
   console.log("생일 체크 실행:", today);
@@ -266,33 +204,71 @@ function checkBirthdays() {
   }
 }
 
-// 하루 1회 스케줄링
-function scheduleDailyBirthdayCheck() {
+// =====================
+// 7. 활동 리포트
+// =====================
+function postDailyActivitySummary() {
+  console.log("활동 리포트 실행");
+
+  for (const [guildId, users] of Object.entries(activity)) {
+    const guild = client.guilds.cache.get(guildId);
+    if (!guild) continue;
+
+    const channel = guild.channels.cache.get(ACTIVITY_CHANNEL_ID);
+    if (!channel) continue;
+
+    const entries = Object.entries(users);
+    if (entries.length === 0) continue;
+
+    // 메시지 수 내림차순 정렬
+    entries.sort((a, b) => b[1] - a[1]);
+    const top = entries.slice(0, 5);
+
+    let desc = "📊 **오늘의 활동 TOP 멤버**\n";
+    const medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣"];
+
+    top.forEach(([userId, count], idx) => {
+      desc += `${medals[idx] || "•"} <@${userId}> — \`${count} 메시지\`\n`;
+    });
+
+    channel.send(desc);
+  }
+
+  // 다음 날 집계를 위해 초기화
+  activity = {};
+  saveActivity();
+}
+
+// =====================
+// 8. 하루 1회 스케줄링
+// =====================
+function scheduleDailyTasks() {
   const now = new Date();
   const kst = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
 
   const next = new Date(kst);
-  next.setHours(0, 5, 0, 0); // 00:05
+  next.setHours(0, 5, 0, 0); // 00:05 실행
 
-  // 이미 00:05 지났으면 다음날
   if (kst > next) {
     next.setDate(next.getDate() + 1);
   }
 
   const delay = next - kst;
+  console.log("다음 데일리 작업까지 남은 ms:", delay);
 
-  console.log("다음 생일 체크까지 남은 ms:", delay);
-
-  // 첫 실행 예약
   setTimeout(() => {
     checkBirthdays();
-    // 이후 매일 24시간 간격 실행
-    setInterval(checkBirthdays, 24 * 60 * 60 * 1000);
+    postDailyActivitySummary();
+
+    setInterval(() => {
+      checkBirthdays();
+      postDailyActivitySummary();
+    }, 24 * 60 * 60 * 1000); // 24시간마다
   }, delay);
 }
 
 // =====================
-// 6. 로그인
+// 9. 로그인
 // =====================
 const token = process.env.DISCORD_TOKEN;
 
