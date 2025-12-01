@@ -6,11 +6,9 @@ const path = require("path");
 // 1. 파일 / 설정 상수
 // =====================
 const BIRTHDAY_FILE = path.join(__dirname, "birthdays.json");
-const ACTIVITY_FILE = path.join(__dirname, "activity.json");
 
-// 🔴 여기 공지용 채널 ID로 바꿔줘
+// 🔴 여기 생일 공지 보낼 채널 ID
 const BIRTHDAY_CHANNEL_ID = "1260292142543147202";  // 생일 축하 채널
-const ACTIVITY_CHANNEL_ID = "1260292141746491420";   // 활동 리포트 보낼 채널
 
 const ROLE_ID = "1260292139493883912";              // 뉴페관리자 역할 ID
 
@@ -25,19 +23,6 @@ try {
 
 function saveBirthdays() {
   fs.writeFileSync(BIRTHDAY_FILE, JSON.stringify(birthdays, null, 2), "utf8");
-}
-
-// ----- 활동 데이터 로드 -----
-let activity = {};
-try {
-  const raw = fs.readFileSync(ACTIVITY_FILE, "utf8");
-  activity = JSON.parse(raw);
-} catch (e) {
-  activity = {};
-}
-
-function saveActivity() {
-  fs.writeFileSync(ACTIVITY_FILE, JSON.stringify(activity, null, 2), "utf8");
 }
 
 // =====================
@@ -57,8 +42,8 @@ const client = new Client({
 client.on("ready", () => {
   console.log(`로그인 성공: ${client.user.tag}`);
 
-  // 하루 1회 생일 + 활동 리포트 실행
-  scheduleDailyTasks();
+  // 하루 1회 생일 체크만 실행
+  scheduleDailyBirthdayCheck();
 });
 
 // =====================
@@ -69,16 +54,6 @@ client.on("messageCreate", (msg) => {
 
   const guildId = msg.guild?.id;
   const userId = msg.author.id;
-
-  // ───────────────────────────
-  // (공통) 활동 기록
-  // ───────────────────────────
-  if (guildId) {
-    if (!activity[guildId]) activity[guildId] = {};
-    if (!activity[guildId][userId]) activity[guildId][userId] = 0;
-    activity[guildId][userId] += 1;
-    saveActivity();
-  }
 
   // ───────────────────────────
   // !환영
@@ -156,7 +131,7 @@ client.on("messageCreate", (msg) => {
 
   // ───────────────────────────
   // !내생일 (옵션: birthdays.json을 수동으로 관리하고 싶으면 유지)
-// ───────────────────────────
+  // ───────────────────────────
   if (msg.content.startsWith("!내생일")) {
     if (!guildId) return;
 
@@ -167,8 +142,6 @@ client.on("messageCreate", (msg) => {
 
     msg.channel.send(`🎂 ${msg.author} 님의 생일은 **${birthdays[guildId][userId]}** 입니다!`);
   }
-
-  // 여기서부터는 예전 생일등록/삭제/오늘생일/이번달생일/생일명령어는 전부 제거됨
 });
 
 // =====================
@@ -183,7 +156,7 @@ function getTodayKST() {
 }
 
 // =====================
-// 6. 생일 체크 (자동 공지용 – birthdays.json 쓰고 싶으면 유지)
+// 6. 생일 자동 체크
 // =====================
 function checkBirthdays() {
   const today = getTodayKST();
@@ -205,44 +178,9 @@ function checkBirthdays() {
 }
 
 // =====================
-// 7. 활동 리포트
+// 7. 하루 1회 생일 스케줄링
 // =====================
-function postDailyActivitySummary() {
-  console.log("활동 리포트 실행");
-
-  for (const [guildId, users] of Object.entries(activity)) {
-    const guild = client.guilds.cache.get(guildId);
-    if (!guild) continue;
-
-    const channel = guild.channels.cache.get(ACTIVITY_CHANNEL_ID);
-    if (!channel) continue;
-
-    const entries = Object.entries(users);
-    if (entries.length === 0) continue;
-
-    // 메시지 수 내림차순 정렬
-    entries.sort((a, b) => b[1] - a[1]);
-    const top = entries.slice(0, 5);
-
-    let desc = "📊 **오늘의 활동 TOP 멤버**\n";
-    const medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣"];
-
-    top.forEach(([userId, count], idx) => {
-      desc += `${medals[idx] || "•"} <@${userId}> — \`${count} 메시지\`\n`;
-    });
-
-    channel.send(desc);
-  }
-
-  // 다음 날 집계를 위해 초기화
-  activity = {};
-  saveActivity();
-}
-
-// =====================
-// 8. 하루 1회 스케줄링
-// =====================
-function scheduleDailyTasks() {
+function scheduleDailyBirthdayCheck() {
   const now = new Date();
   const kst = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
 
@@ -254,21 +192,19 @@ function scheduleDailyTasks() {
   }
 
   const delay = next - kst;
-  console.log("다음 데일리 작업까지 남은 ms:", delay);
+  console.log("다음 생일 체크까지 남은 ms:", delay);
 
   setTimeout(() => {
     checkBirthdays();
-    postDailyActivitySummary();
 
     setInterval(() => {
       checkBirthdays();
-      postDailyActivitySummary();
     }, 24 * 60 * 60 * 1000); // 24시간마다
   }, delay);
 }
 
 // =====================
-// 9. 로그인
+// 8. 로그인
 // =====================
 const token = process.env.DISCORD_TOKEN;
 
@@ -278,4 +214,3 @@ if (!token) {
 }
 
 client.login(token);
-
